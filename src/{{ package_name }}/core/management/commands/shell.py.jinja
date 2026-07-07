@@ -1,0 +1,55 @@
+# Management command: shell — interactive Python shell with app context preloaded.
+# Drops into IPython (if available) or the standard Python REPL with useful
+# objects already imported: settings, db session, models, etc.
+from __future__ import annotations
+
+import sys
+
+
+def execute() -> None:
+    """Launch an interactive shell with the application context preloaded.
+
+    The following objects are available in the shell namespace:
+      - settings: project settings instance
+      - engine: SQLAlchemy async engine
+      - SessionLocal: async session factory
+    """
+    # Build namespace with commonly-needed objects
+    namespace: dict[str, object] = {}
+
+    try:
+        from {{ package_name }}.settings import settings  # noqa: F811
+
+        namespace["settings"] = settings
+    except Exception:
+        pass
+
+    try:
+        from {{ package_name }}.db.engines import engine
+
+        namespace["engine"] = engine
+    except Exception:
+        pass
+
+    try:
+        from {{ package_name }}.db.sessions import SessionLocal
+
+        namespace["SessionLocal"] = SessionLocal
+    except Exception:
+        pass
+
+    banner = (
+        "\n{{ project_name }} Interactive Shell\n"
+        "Available objects: " + ", ".join(namespace.keys()) + "\n"
+    )
+
+    # Prefer IPython if installed
+    try:
+        from IPython import start_ipython
+
+        start_ipython(argv=[], user_ns=namespace, display_banner=True)
+    except ImportError:
+        import code
+
+        code.interact(banner=banner, local=namespace, exitmsg="Goodbye!")
+        sys.exit(0)

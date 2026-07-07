@@ -1,0 +1,168 @@
+# ============================================================================
+# {{ project_name }} — Python project configuration
+# ============================================================================
+# Single-file config: metadata, dependencies, ruff, mypy, pytest.
+# No separate pytest.ini, mypy.ini, or setup.cfg needed.
+# ============================================================================
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "{{ project_slug }}"
+version = "0.1.0"
+description = "{{ project_name }} — a production-grade FastAPI service."
+readme = "README.md"
+license = {text = "{{ open_source_license }}"}
+requires-python = ">={{ python_version }}"
+authors = [
+    {name = "{{ author_name }}", email = "{{ author_email }}"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: {{ python_version }}",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    # ---- Web framework ----
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+
+    # ---- Database ----
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14.0",
+{% if database == "postgresql" %}
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9.10",
+{% elif database == "mysql" %}
+    "aiomysql>=0.2.0",
+    "mysqlclient>=2.2.0",
+{% else %}
+    "aiosqlite>=0.20.0",
+{% endif %}
+
+    # ---- CLI ----
+    "typer[all]>=0.14.0",
+
+    # ---- Utilities ----
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.0",
+    "orjson>=3.10.0",
+{% if use_celery %}
+
+    # ---- Task queue ----
+    "celery[redis]>=5.4.0",
+{% endif %}
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "tox>=4.21.0",
+    "ipython>=8.29.0",
+    "factory-boy>=3.3.0",
+    "sqlalchemy[mypy]>=2.0.36",
+]
+
+[project.scripts]
+{{ package_name }} = "{{ package_name }}.cli.commands:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ package_name }}"]
+
+# ---------------------------------------------------------------------------
+# Ruff — linter + formatter (replaces flake8, isort, black)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py{{ python_version | replace('.', '') }}"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "S",    # bandit (security)
+    "A",    # builtins shadowing
+    "C4",   # flake8-comprehensions
+    "DTZ",  # datetime timezone
+    "T20",  # print statements
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "S101",  # assert used (fine in tests)
+    "B008",  # function-call-in-default-argument (FastAPI Depends)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["{{ package_name }}"]
+
+# ---------------------------------------------------------------------------
+# Mypy — static type checking
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "{{ python_version }}"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src/{{ package_name }}",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+]
+markers = [
+    "unit: Fast tests with no I/O (deselect: -m 'not unit')",
+    "integration: Tests requiring a real database (deselect: -m 'not integration')",
+    "e2e: Full end-to-end request/response tests (deselect: -m 'not e2e')",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:sqlalchemy.*",
+]
+
+[tool.coverage.run]
+source = ["src/{{ package_name }}"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__",
+]

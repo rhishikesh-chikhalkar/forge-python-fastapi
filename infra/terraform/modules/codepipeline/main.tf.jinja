@@ -1,0 +1,171 @@
+# CodePipeline module — CI/CD pipeline for building, testing, and deploying.
+# Integrates CodeBuild for build/test and CodePipeline for orchestration.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# S3 bucket for pipeline artifacts (build outputs, etc.)
+# ---------------------------------------------------------------------------
+resource "aws_s3_bucket" "pipeline_artifacts" {
+  bucket        = "${var.project_name}-${var.environment}-pipeline-artifacts"
+  force_destroy = true
+
+  tags = {
+    Name        = "${var.project_name}-pipeline-artifacts"
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CodeBuild project — lint + test
+# ---------------------------------------------------------------------------
+resource "aws_codebuild_project" "test" {
+  name         = "${var.project_name}-${var.environment}-test"
+  description  = "Run linting and tests for ${var.project_name}"
+  service_role = aws_iam_role.codebuild.arn
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
+    type            = "LINUX_CONTAINER"
+    privileged_mode = false
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infra/codepipeline/buildspec.yml"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-test"
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CodeBuild project — build image + deploy
+# ---------------------------------------------------------------------------
+resource "aws_codebuild_project" "deploy" {
+  name         = "${var.project_name}-${var.environment}-deploy"
+  description  = "Build Docker image and deploy ${var.project_name}"
+  service_role = aws_iam_role.codebuild.arn
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type    = "BUILD_GENERAL1_MEDIUM"
+    image           = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
+    type            = "LINUX_CONTAINER"
+    privileged_mode = true  # Required for docker build
+
+    environment_variable {
+      name  = "ECR_REPO_URL"
+      value = var.ecr_repository_url
+    }
+
+    environment_variable {
+      name  = "EKS_CLUSTER_NAME"
+      value = var.eks_cluster_name
+    }
+
+    environment_variable {
+      name  = "AWS_REGION"
+      value = var.region
+    }
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "infra/codepipeline/buildspec-deploy.yml"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-deploy"
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CodePipeline — orchestrates the full CI/CD flow
+# ---------------------------------------------------------------------------
+resource "aws_codepipeline" "main" {
+  name     = "${var.project_name}-${var.environment}"
+  role_arn = aws_iam_role.codepipeline.arn
+
+  artifact_store {
+    location = aws_s3_bucket.pipeline_artifacts.bucket
+    type     = "S3"
+  }
+
+  stage {
+    name = "Source"
+
+    action {
+      name             = "Source"
+      category         = "Source"
+      owner            = "ThirdParty"
+      provider         = "GitHub"
+      version          = "2"
+      output_artifacts = ["source_output"]
+
+      configuration = {
+        ConnectionArn    = var.github_connection_arn
+        FullRepositoryId = var.github_repo
+        BranchName       = var.github_branch
+      }
+    }
+  }
+
+  stage {
+    name = "Test"
+
+    action {
+      name            = "LintAndTest"
+      category        = "Build"
+      owner           = "AWS"
+      provider        = "CodeBuild"
+      version         = "1"
+      input_artifacts = ["source_output"]
+
+      configuration = {
+        ProjectName = aws_codebuild_project.test.name
+      }
+    }
+  }
+
+  stage {
+    name = "Deploy"
+
+    action {
+      name            = "BuildAndDeploy"
+      category        = "Build"
+      owner           = "AWS"
+      provider        = "CodeBuild"
+      version         = "1"
+      input_artifacts = ["source_output"]
+
+      configuration = {
+        ProjectName = aws_codebuild_project.deploy.name
+      }
+    }
+  }
+
+  tags = {
+    Name        = "${var.project_name}-pipeline"
+    Environment = var.environment
+  }
+}

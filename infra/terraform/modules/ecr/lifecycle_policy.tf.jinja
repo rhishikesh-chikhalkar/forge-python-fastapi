@@ -1,0 +1,42 @@
+# ECR lifecycle policy — automatically expire old images to control storage costs.
+# Keeps the most recent N tagged images and removes untagged images after 1 day.
+
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        # Remove untagged images after 1 day — these are typically
+        # intermediate build layers or failed pushes.
+        rulePriority = 1
+        description  = "Remove untagged images after 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        # Keep only the last 30 tagged images — older images are rarely
+        # needed and consume storage costs.  Increase this number if you
+        # need longer rollback windows.
+        rulePriority = 2
+        description  = "Keep only last ${var.max_image_count} tagged images"
+        selection = {
+          tagStatus   = "tagged"
+          tagPrefixList = ["v", "latest", "sha-"]
+          countType   = "imageCountMoreThan"
+          countNumber = var.max_image_count
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}

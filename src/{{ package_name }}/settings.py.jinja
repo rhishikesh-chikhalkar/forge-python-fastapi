@@ -1,0 +1,50 @@
+# Project-level settings — overrides framework defaults from conf/global_settings.py.
+# Reads all configuration from environment variables via pydantic-settings.
+# Import this module wherever you need access to project configuration.
+from __future__ import annotations
+
+from {{ package_name }}.conf.global_settings import GlobalSettings
+
+
+class Settings(GlobalSettings):
+    """Project-specific settings extending framework-level defaults.
+
+    All fields are read from environment variables (case-insensitive).
+    Prefix is not enforced so env vars map directly to field names.
+    """
+
+    # ---- Application ----
+    PROJECT_NAME: str = "{{ project_name }}"
+    DEBUG: bool = False
+    ENVIRONMENT: str = "production"
+    SECRET_KEY: str = "change-me-in-production"
+    ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1"]
+
+    # ---- Server ----
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    WORKERS: int = 4
+
+    # ---- Database ----
+{% if database == "postgresql" %}
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/{{ package_name }}"
+{% elif database == "mysql" %}
+    DATABASE_URL: str = "mysql+aiomysql://root:root@localhost:3306/{{ package_name }}"
+{% else %}
+    DATABASE_URL: str = "sqlite+aiosqlite:///./{{ package_name }}.db"
+{% endif %}
+
+    # ---- Redis ----
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+{% if use_celery %}
+    # ---- Celery ----
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+{% endif %}
+
+    model_config = GlobalSettings.model_config.copy()
+
+
+# Module-level singleton — import this from anywhere in the project.
+settings = Settings()

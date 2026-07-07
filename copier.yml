@@ -1,0 +1,183 @@
+# ============================================================================
+# forge-python-generic — Copier Template Configuration
+# ============================================================================
+# A production-grade FastAPI project generator with hexagonal architecture,
+# AWS EKS infrastructure, Helm charts, and CI/CD pipelines.
+#
+# Usage:
+#   copier copy gh:you/forge-python-generic my-new-project
+#   copier update   (from inside a generated project to pull template changes)
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Copier Settings
+# ---------------------------------------------------------------------------
+_min_copier_version: "9.0.0"
+
+# The template lives at the repo root — no wrapper subdirectory.
+_subdirectory: "."
+
+# Only files ending in .jinja are rendered through Jinja; the suffix is
+# stripped from the output filename.  Plain files are copied verbatim.
+_templates_suffix: ".jinja"
+
+# This file is written into every generated project automatically by Copier.
+# It records the answers used so `copier update` can replay them.
+_answers_file: .copier-answers.yml
+
+# ---------------------------------------------------------------------------
+# Post-generation tasks
+# ---------------------------------------------------------------------------
+# These commands run sequentially inside the generated project directory
+# immediately after all template files have been rendered.
+_tasks:
+  - "git init"
+  - "git add ."
+  - 'git commit -m "Initial commit from forge-python-generic template"'
+  - "uv sync"
+  - "pre-commit install"
+  - >-
+    echo "" &&
+    echo "🚀  Project '{{ project_name }}' created successfully!" &&
+    echo "" &&
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" &&
+    echo "  Getting-Started Checklist" &&
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" &&
+    echo "  1. cd {{ project_slug }}" &&
+    echo "  2. cp .env.example .env   # edit with your values" &&
+    echo "  3. make install" &&
+    echo "  4. make test" &&
+    echo "  5. make run" &&
+    echo "" &&
+    echo "  Pull future template updates:" &&
+    echo "    cd {{ project_slug }} && copier update" &&
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" &&
+    echo ""
+
+# ---------------------------------------------------------------------------
+# Migrations
+# ---------------------------------------------------------------------------
+# When you release a new version of this template and a developer runs
+# `copier update` inside a project that was generated from an older version,
+# Copier can execute migration scripts automatically.
+#
+# Each entry maps a template version to shell commands that run BEFORE or
+# AFTER the template files are re-rendered.  This lets you automate
+# non-trivial upgrades such as renaming settings, moving files, adding new
+# dependencies, or running database migrations.
+#
+# Format:
+#   _migrations:
+#     - version: "1.1.0"
+#       before:
+#         - "echo 'Preparing migration to v1.1.0 …'"
+#       after:
+#         - "uv sync"
+#         - "uv run alembic upgrade head"
+#
+#     - version: "2.0.0"
+#       before:
+#         - "mv src/{{ package_name }}/config.py src/{{ package_name }}/settings.py"
+#       after:
+#         - "uv sync"
+#
+# Keep this list in ascending version order.
+_migrations: []
+
+# ---------------------------------------------------------------------------
+# Template Variables  (prompted in the order defined below)
+# ---------------------------------------------------------------------------
+
+project_name:
+  type: str
+  help: >-
+    The human-readable name of your project
+    (e.g. "My Awesome API", "Customer Portal Backend").
+  validator: >-
+    {% if not project_name %}
+    Project name is required.
+    {% endif %}
+
+package_name:
+  type: str
+  help: >-
+    Python package name used for imports (snake_case, must be a valid
+    Python identifier).  Defaults to a sanitised version of project_name.
+  default: >-
+    {{ project_name
+       | lower
+       | replace(' ', '_')
+       | replace('-', '_')
+       | replace('.', '_') }}
+  validator: >-
+    {% if not package_name.isidentifier() %}
+    Must be a valid Python identifier (letters, digits, underscores;
+    cannot start with a digit).
+    {% endif %}
+
+project_slug:
+  type: str
+  help: >-
+    URL-safe, directory-friendly slug derived from the project name.
+    Used for Docker image tags, Helm release names, and repo directories.
+  default: >-
+    {{ project_name
+       | lower
+       | replace(' ', '-')
+       | replace('_', '-')
+       | replace('.', '-') }}
+
+author_name:
+  type: str
+  help: "Full name of the primary project author or team."
+  validator: >-
+    {% if not author_name %}
+    Author name is required.
+    {% endif %}
+
+author_email:
+  type: str
+  help: "Contact email for the project author (used in pyproject.toml and LICENSE)."
+  validator: >-
+    {% if '@' not in author_email or '.' not in author_email.split('@')[-1] %}
+    Must be a valid email address (e.g. dev@example.com).
+    {% endif %}
+
+python_version:
+  type: str
+  help: "Target Python version for the project runtime and CI matrix."
+  choices:
+    - "3.11"
+    - "3.12"
+    - "3.13"
+  default: "3.12"
+
+use_celery:
+  type: bool
+  help: "Include Celery task queue stub?"
+  default: false
+
+use_argocd:
+  type: bool
+  help: "Use GitOps pull-based deploys via ArgoCD?"
+  default: false
+
+database:
+  type: str
+  help: >-
+    Primary database backend.  Determines driver dependencies,
+    connection string format, and Docker Compose services.
+  choices:
+    - "postgresql"
+    - "mysql"
+    - "sqlite"
+  default: "postgresql"
+
+open_source_license:
+  type: str
+  help: "Open-source license to apply.  Choose 'None' for proprietary / unlicensed."
+  choices:
+    - "MIT"
+    - "Apache-2.0"
+    - "None"
+  default: "MIT"

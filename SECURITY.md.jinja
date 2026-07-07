@@ -1,0 +1,46 @@
+# Security Policy — {{ project_name }}
+
+## Supported Versions
+
+| Version | Supported          |
+|---------|--------------------|
+| 0.1.x   | ✅ Current release |
+
+## Reporting a Vulnerability
+
+**Please do NOT report security vulnerabilities through public GitHub issues.**
+
+Instead, please report them via email to **{{ author_email }}** with:
+
+1. **Description** of the vulnerability
+2. **Steps to reproduce** (or a proof-of-concept)
+3. **Impact assessment** — what an attacker could achieve
+4. **Suggested fix** (if you have one)
+
+### What to expect
+
+- **Acknowledgement** within 48 hours
+- **Assessment** within 5 business days
+- **Fix timeline** communicated after assessment
+- **Credit** in the CHANGELOG (unless you prefer to remain anonymous)
+
+## Security Best Practices
+
+This project follows these security practices:
+
+- **No secrets in code** — all secrets are read from environment variables
+  or AWS Secrets Manager via External Secrets Operator
+- **Dependency scanning** — Dependabot / Renovate for automated updates
+- **Static analysis** — ruff security rules (`S` ruleset) and mypy strict mode
+- **IRSA** — Kubernetes pods authenticate to AWS via IAM Roles for Service
+  Accounts, not static credentials
+- **Network policies** — Kubernetes NetworkPolicy restricts pod-to-pod traffic
+- **TLS everywhere** — ALB terminates TLS; internal traffic is within the VPC
+
+## Responsible Disclosure
+
+We kindly ask that you:
+
+- Give us reasonable time to fix the issue before public disclosure
+- Do not access or modify data belonging to other users
+- Act in good faith to avoid disruption to our services

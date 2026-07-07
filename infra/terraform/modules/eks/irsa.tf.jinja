@@ -1,0 +1,75 @@
+# IRSA (IAM Roles for Service Accounts) — allows Kubernetes pods to assume
+# AWS IAM roles without static credentials.  This is the recommended way
+# for EKS pods to access AWS services (S3, Secrets Manager, SQS, etc.).
+#
+# How it works:
+#   1. EKS creates an OIDC provider (below)
+#   2. An IAM role trusts that OIDC provider for a specific service account
+#   3. The Helm chart's ServiceAccount annotation references this IAM role ARN
+#   4. Pods using that ServiceAccount automatically get temporary AWS credentials
+
+# ---------------------------------------------------------------------------
+# OIDC Provider — links the EKS cluster's identity to IAM
+# ---------------------------------------------------------------------------
+data "tls_certificate" "eks" {
+  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
+
+  tags = {
+    Name        = "${var.project_name}-eks-oidc"
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# IAM Role for the application service account — grants AWS permissions to pods
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "app_irsa" {
+  name = "${var.project_name}-${var.environment}-app-irsa"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:${var.project_name}:${var.project_name}-sa"
+          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-app-irsa"
+    Environment = var.environment
+  }
+}
+
+# Attach policies to the IRSA role based on what the app needs.
+# Example: allow the app to read from Secrets Manager.
+resource "aws_iam_role_policy" "app_secrets_access" {
+  name = "${var.project_name}-secrets-access"
+  role = aws_iam_role.app_irsa.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+      ]
+      Resource = "arn:aws:secretsmanager:${var.region}:*:secret:${var.project_name}/*"
+    }]
+  })
+}

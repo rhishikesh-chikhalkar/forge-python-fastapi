@@ -1,0 +1,27 @@
+# ArgoCD Application manifest for the dev environment.
+# ArgoCD monitors this repo and automatically syncs the Helm chart
+# to the target EKS cluster — no manual helm upgrade needed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ project_slug }}-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/you/{{ project_slug }}.git"
+    targetRevision: main
+    path: infra/helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ project_slug }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

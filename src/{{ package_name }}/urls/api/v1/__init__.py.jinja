@@ -1,0 +1,16 @@
+# API v1 router — aggregates all v1 endpoint routers into a single router.
+# This module handles path registration only; handler logic lives in views/.
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from {{ package_name }}.urls.api.v1.ping import router as ping_router
+
+router = APIRouter(tags=["v1"])
+
+# --- Register sub-routers ---
+router.include_router(ping_router)
+
+# Add more routers here as you build new resources:
+# from {{ package_name }}.urls.api.v1.users import router as users_router
+# router.include_router(users_router)

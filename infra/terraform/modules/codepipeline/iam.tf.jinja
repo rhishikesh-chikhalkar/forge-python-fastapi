@@ -1,0 +1,132 @@
+# IAM roles for CodeBuild and CodePipeline — least-privilege access
+# to the resources they need to build, test, and deploy.
+
+# ---------------------------------------------------------------------------
+# CodeBuild IAM Role — allows CodeBuild to access ECR, EKS, logs, etc.
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "codebuild" {
+  name = "${var.project_name}-${var.environment}-codebuild-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "codebuild.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-codebuild-role"
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "codebuild" {
+  name = "${var.project_name}-codebuild-policy"
+  role = aws_iam_role.codebuild.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:GetBucketLocation",
+        ]
+        Resource = "${aws_s3_bucket.pipeline_artifacts.arn}/*"
+      },
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# CodePipeline IAM Role — allows CodePipeline to orchestrate builds/deploys
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "codepipeline" {
+  name = "${var.project_name}-${var.environment}-codepipeline-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "codepipeline.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-codepipeline-role"
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "codepipeline" {
+  name = "${var.project_name}-codepipeline-policy"
+  role = aws_iam_role.codepipeline.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:GetBucketVersioning",
+        ]
+        Resource = [
+          aws_s3_bucket.pipeline_artifacts.arn,
+          "${aws_s3_bucket.pipeline_artifacts.arn}/*",
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["codestar-connections:UseConnection"]
+        Resource = var.github_connection_arn
+      },
+    ]
+  })
+}

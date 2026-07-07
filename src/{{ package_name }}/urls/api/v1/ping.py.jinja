@@ -1,0 +1,20 @@
+# Route registration for the ping health-check endpoint.
+# This module wires the URL path to the view function — no business logic here.
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from {{ package_name }}.schemas.response.ping import PingResponse
+from {{ package_name }}.views.ping import ping
+
+router = APIRouter()
+
+router.add_api_route(
+    path="/ping",
+    endpoint=ping,
+    methods=["GET"],
+    response_model=PingResponse,
+    summary="Health check",
+    description="Returns a simple health-check response to verify the service is running.",
+    tags=["health"],
+)

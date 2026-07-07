@@ -1,0 +1,42 @@
+# Framework-level default settings — shared across all projects built with this template.
+# Project-specific overrides go in settings.py (one level up).
+# All values are read from environment variables via pydantic-settings.
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class GlobalSettings(BaseSettings):
+    """Base settings with sensible framework-level defaults.
+
+    Subclass this in your project's settings.py to add or override values.
+    Environment variables are matched case-insensitively and a .env file
+    is loaded automatically if present.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # ---- Logging ----
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"  # "json" or "text"
+
+    # ---- CORS ----
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ]
+    CORS_ALLOW_CREDENTIALS: bool = True
+    CORS_ALLOW_METHODS: list[str] = ["*"]
+    CORS_ALLOW_HEADERS: list[str] = ["*"]
+
+    # ---- Security ----
+    TRUSTED_HOSTS: list[str] = ["localhost", "127.0.0.1"]
+
+    # ---- Pagination ----
+    DEFAULT_PAGE_SIZE: int = 20
+    MAX_PAGE_SIZE: int = 100

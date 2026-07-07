@@ -1,0 +1,58 @@
+# Staging environment — mirrors production topology at reduced scale.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = { source = "hashicorp/aws"; version = "~> 5.0" }
+  }
+  backend "s3" {
+    bucket         = "{{ project_slug }}-terraform-state"
+    key            = "staging/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "{{ project_slug }}-terraform-locks"
+    encrypt        = true
+  }
+}
+
+provider "aws" { region = var.region }
+
+module "vpc" {
+  source       = "../../modules/vpc"
+  project_name = var.project_name
+  environment  = "staging"
+  vpc_cidr     = "10.1.0.0/16"
+  az_count     = 2
+}
+
+module "eks" {
+  source             = "../../modules/eks"
+  project_name       = var.project_name
+  environment        = "staging"
+  region             = var.region
+  private_subnet_ids = module.vpc.private_subnet_ids
+  node_desired_size  = 2
+  node_min_size      = 2
+  node_max_size      = 5
+  node_instance_types = ["t3.large"]
+}
+
+module "ecr" {
+  source       = "../../modules/ecr"
+  project_name = var.project_name
+  environment  = "staging"
+}
+
+module "secrets" {
+  source       = "../../modules/secrets"
+  project_name = var.project_name
+  environment  = "staging"
+  database_url = var.database_url
+  secret_key   = var.secret_key
+}
+
+module "monitoring" {
+  source       = "../../modules/monitoring"
+  project_name = var.project_name
+  environment  = "staging"
+  cluster_name = module.eks.cluster_name
+}

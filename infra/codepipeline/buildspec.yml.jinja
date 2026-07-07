@@ -1,0 +1,33 @@
+# CodeBuild buildspec — lint + test stage
+# Runs ruff linting, mypy type checking, and the full pytest suite.
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: {{ python_version }}
+    commands:
+      - echo "Installing uv..."
+      - curl -LsSf https://astral.sh/uv/install.sh | sh
+      - export PATH="$HOME/.local/bin:$PATH"
+      - uv sync --frozen
+
+  pre_build:
+    commands:
+      - echo "Running linters..."
+      - uv run ruff check src/ tests/
+      - uv run ruff format --check src/ tests/
+
+  build:
+    commands:
+      - echo "Running type checker..."
+      - uv run mypy src/{{ package_name }}
+      - echo "Running tests..."
+      - uv run pytest --tb=short --no-header -q
+
+reports:
+  pytest-reports:
+    files:
+      - "**/*.xml"
+    base-directory: "."
+    file-format: JUNITXML

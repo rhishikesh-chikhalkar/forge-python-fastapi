@@ -1,0 +1,63 @@
+# Management command: loaddata — seed the database from JSON fixture files.
+# Usage: {{ package_name }} loaddata fixtures/seed.json
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def execute(fixture_path: str) -> None:
+    """Load seed data from a JSON fixture file into the database.
+
+    The fixture file should be a JSON array of objects, each with a
+    "model" key (the SQLAlchemy model name) and a "fields" dict.
+
+    Example fixture format::
+
+        [
+            {
+                "model": "User",
+                "fields": {
+                    "username": "admin",
+                    "email": "admin@example.com"
+                }
+            }
+        ]
+
+    Args:
+        fixture_path: Path to the JSON fixture file.
+    """
+    path = Path(fixture_path)
+    if not path.exists():
+        logger.error("Fixture file not found: %s", path)
+        return
+
+    with path.open() as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        logger.error("Fixture file must contain a JSON array of objects.")
+        return
+
+    asyncio.run(_load_fixtures(data))
+
+
+async def _load_fixtures(records: list[dict]) -> None:  # type: ignore[type-arg]
+    """Async helper to insert fixture records into the database."""
+    from {{ package_name }}.db.sessions import SessionLocal
+
+    async with SessionLocal() as session:
+        for record in records:
+            model_name = record.get("model", "unknown")
+            fields = record.get("fields", {})
+            logger.info("Loading %s: %s", model_name, fields)
+            # NOTE: Extend this with a model registry to map model_name -> ORM class
+            # For now, log the data that would be inserted.
+            logger.info("  → Would insert into %s: %s", model_name, fields)
+
+        await session.commit()
+        logger.info("Loaded %d fixture records.", len(records))

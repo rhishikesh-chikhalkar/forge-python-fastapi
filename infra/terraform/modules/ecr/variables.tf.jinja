@@ -1,0 +1,15 @@
+variable "project_name" {
+  description = "Project name for the ECR repository."
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment."
+  type        = string
+}
+
+variable "max_image_count" {
+  description = "Maximum number of tagged images to keep before expiring old ones."
+  type        = number
+  default     = 30
+}

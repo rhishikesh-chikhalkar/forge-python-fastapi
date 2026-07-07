@@ -1,0 +1,51 @@
+# SQLAlchemy async engine and connection pool configuration.
+# Supports multiple named engines for multi-database setups.
+# The default engine is created from DATABASE_URL in settings.
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+
+from {{ package_name }}.settings import settings
+
+# ---------------------------------------------------------------------------
+# Default engine — configured from DATABASE_URL
+# ---------------------------------------------------------------------------
+engine: AsyncEngine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_pre_ping=True,  # verify connections before checkout
+{% if database == "postgresql" %}
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=3600,  # recycle connections after 1 hour
+{% elif database == "mysql" %}
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=3600,
+{% else %}
+    # SQLite doesn't use connection pooling in the same way
+    connect_args={"check_same_thread": False},
+{% endif %}
+)
+
+
+def get_engine(name: str = "default") -> AsyncEngine:
+    """Retrieve a named engine.
+
+    For now only "default" is supported, but this factory pattern allows
+    adding read-replicas or secondary databases later without changing
+    the call sites.
+
+    Args:
+        name: Engine identifier. Currently only "default" is supported.
+
+    Returns:
+        The SQLAlchemy async engine instance.
+    """
+    engines: dict[str, AsyncEngine] = {
+        "default": engine,
+    }
+    if name not in engines:
+        msg = f"Unknown database engine: {name!r}. Available: {list(engines.keys())}"
+        raise KeyError(msg)
+    return engines[name]

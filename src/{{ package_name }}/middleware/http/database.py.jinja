@@ -1,0 +1,38 @@
+# Per-request database session middleware — opens a session at the start of each
+# HTTP request and closes it when the response is sent (or on error).
+# This ensures every request gets a clean session and connections are returned to the pool.
+from __future__ import annotations
+
+import logging
+
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
+
+from {{ package_name }}.db.sessions import SessionLocal
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseSessionMiddleware(BaseHTTPMiddleware):
+    """Attach an async DB session to each request's state.
+
+    The session is available as ``request.state.db`` in downstream
+    handlers and dependencies.  It is automatically closed when the
+    response is returned, regardless of success or failure.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        async with SessionLocal() as session:
+            request.state.db = session
+            try:
+                response = await call_next(request)
+                await session.commit()
+                return response
+            except Exception:
+                await session.rollback()
+                raise

@@ -1,0 +1,33 @@
+# Database dependency provider — yields an async DB session for the duration of a request.
+# Reusable from API routes, CLI commands, and background tasks alike.
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from {{ package_name }}.db.sessions import SessionLocal
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Yield an async database session, ensuring cleanup on exit.
+
+    Usage in FastAPI routes::
+
+        @router.get("/items")
+        async def list_items(db: AsyncSession = Depends(get_db)):
+            ...
+
+    Usage in CLI or background tasks::
+
+        async with contextlib.aclosing(get_db()) as gen:
+            db = await gen.__anext__()
+            ...
+    """
+    async with SessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

@@ -1,0 +1,39 @@
+# CodeBuild buildspec — build Docker image, push to ECR, deploy via Helm.
+version: 0.2
+
+env:
+  variables:
+    HELM_RELEASE: "{{ project_slug }}"
+    HELM_NAMESPACE: "{{ project_slug }}"
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging into ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:-latest}
+      - echo "Image tag: $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -f docker/Dockerfile -t $ECR_REPO_URL:$IMAGE_TAG -t $ECR_REPO_URL:latest .
+      - echo "Pushing to ECR..."
+      - docker push $ECR_REPO_URL:$IMAGE_TAG
+      - docker push $ECR_REPO_URL:latest
+
+  post_build:
+    commands:
+      - echo "Configuring kubectl..."
+      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+      - echo "Deploying via Helm..."
+      - |
+        helm upgrade --install $HELM_RELEASE infra/helm/ \
+          --namespace $HELM_NAMESPACE \
+          --create-namespace \
+          --set image.repository=$ECR_REPO_URL \
+          --set image.tag=$IMAGE_TAG \
+          --wait \
+          --timeout 300s
+      - echo "Deployment complete!"

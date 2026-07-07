@@ -1,0 +1,35 @@
+# UTC-safe datetime helpers — always use these instead of bare datetime.now().
+# This prevents timezone-naive datetime bugs that are notoriously hard to debug.
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+
+def utc_now() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime.
+
+    Prefer this over ``datetime.utcnow()`` (deprecated in Python 3.12)
+    or ``datetime.now()`` (returns naive local time).
+    """
+    return datetime.now(UTC)
+
+
+def utc_from_timestamp(ts: float) -> datetime:
+    """Convert a UNIX timestamp to a UTC-aware datetime."""
+    return datetime.fromtimestamp(ts, tz=UTC)
+
+
+def utc_days_ago(days: int) -> datetime:
+    """Return the UTC datetime for N days ago.
+
+    Useful for queries like 'find all records older than 30 days'.
+    """
+    return utc_now() - timedelta(days=days)
+
+
+def format_iso(dt: datetime) -> str:
+    """Format a datetime as an ISO 8601 string with UTC offset.
+
+    Example: "2024-01-15T10:30:00+00:00"
+    """
+    return dt.isoformat()

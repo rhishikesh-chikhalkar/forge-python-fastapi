@@ -1,0 +1,57 @@
+# User-facing CLI entrypoint — built with typer.
+# This is distinct from the internal management commands in core/management/commands/.
+# Users invoke this via: {{ package_name }} <command>
+from __future__ import annotations
+
+from typing import Optional
+
+import typer
+
+app = typer.Typer(
+    name="{{ package_name }}",
+    help="{{ project_name }} — command-line interface.",
+    add_completion=True,
+    no_args_is_help=True,
+)
+
+
+@app.command()
+def runserver(
+    host: Optional[str] = typer.Option(None, help="Bind address"),
+    port: Optional[int] = typer.Option(None, help="Bind port"),
+    no_reload: bool = typer.Option(False, "--no-reload", help="Disable auto-reload"),
+) -> None:
+    """Start the development server with hot-reload."""
+    from {{ package_name }}.core.management.commands.runserver import execute
+
+    execute(host=host, port=port, reload=not no_reload)
+
+
+@app.command()
+def shell() -> None:
+    """Open an interactive Python shell with app context preloaded."""
+    from {{ package_name }}.core.management.commands.shell import execute
+
+    execute()
+
+
+@app.command()
+def loaddata(
+    fixture_path: str = typer.Argument(..., help="Path to the JSON fixture file"),
+) -> None:
+    """Load seed data from a JSON fixture file into the database."""
+    from {{ package_name }}.core.management.commands.loaddata import execute
+
+    execute(fixture_path=fixture_path)
+
+
+@app.command()
+def version() -> None:
+    """Show the current application version."""
+    from {{ package_name }} import __version__
+
+    typer.echo(f"{{ project_name }} v{__version__}")
+
+
+if __name__ == "__main__":
+    app()

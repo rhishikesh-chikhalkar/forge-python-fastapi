@@ -1,0 +1,29 @@
+# Management command: runserver — starts the uvicorn development server programmatically.
+# This is the equivalent of Django's `manage.py runserver` but using uvicorn directly.
+from __future__ import annotations
+
+import uvicorn
+
+from {{ package_name }}.settings import settings
+
+
+def execute(
+    host: str | None = None,
+    port: int | None = None,
+    reload: bool = True,
+) -> None:
+    """Start the ASGI development server.
+
+    Args:
+        host: Bind address (defaults to settings.HOST).
+        port: Bind port (defaults to settings.PORT).
+        reload: Enable auto-reload on code changes.
+    """
+    uvicorn.run(
+        "{{ package_name }}.asgi:application",
+        host=host or settings.HOST,
+        port=port or settings.PORT,
+        reload=reload,
+        reload_dirs=["src"],
+        log_level=settings.LOG_LEVEL.lower(),
+    )

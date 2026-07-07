@@ -1,0 +1,16 @@
+# Async session factory — distinct from engines.py so the engine lifecycle
+# and session lifecycle can evolve independently.
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from {{ package_name }}.db.engines import engine
+
+# Session factory bound to the default engine.
+# Use `async with SessionLocal() as session:` to get a scoped session.
+SessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)

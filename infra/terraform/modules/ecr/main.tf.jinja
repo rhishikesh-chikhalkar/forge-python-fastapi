@@ -1,0 +1,37 @@
+# ECR module — container registry for storing Docker images.
+# Images are pushed here by the CI/CD pipeline and pulled by EKS.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# ECR Repository — stores Docker images for the application
+# ---------------------------------------------------------------------------
+resource "aws_ecr_repository" "app" {
+  name                 = var.project_name
+  image_tag_mutability = "MUTABLE"
+  force_delete         = false
+
+  # Enable image scanning on push for vulnerability detection
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  # Encrypt images at rest with AWS-managed keys
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}

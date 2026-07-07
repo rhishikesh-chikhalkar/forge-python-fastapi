@@ -1,0 +1,34 @@
+# Pydantic response model for the ping health-check endpoint.
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class PingResponse(BaseModel):
+    """Response schema for the GET /api/v1/ping health-check endpoint.
+
+    Provides basic information about the running service, used by
+    load balancers, Docker HEALTHCHECK, and Kubernetes probes to
+    determine if the application is healthy.
+    """
+
+    status: str = Field(
+        ...,
+        description="Service health status.",
+        examples=["ok"],
+    )
+    service: str = Field(
+        ...,
+        description="Name of the service.",
+        examples=["{{ project_name }}"],
+    )
+    version: str = Field(
+        ...,
+        description="Current application version.",
+        examples=["0.1.0"],
+    )
+    environment: str = Field(
+        ...,
+        description="Deployment environment.",
+        examples=["development", "staging", "production"],
+    )

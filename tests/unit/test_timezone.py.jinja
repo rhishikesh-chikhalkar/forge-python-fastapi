@@ -1,0 +1,62 @@
+# Unit tests for utils/timezone.py — fast, no I/O.
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from {{ package_name }}.utils.timezone import format_iso, utc_days_ago, utc_from_timestamp, utc_now
+
+
+@pytest.mark.unit
+class TestUtcNow:
+    """Tests for utc_now()."""
+
+    def test_returns_aware_datetime(self) -> None:
+        result = utc_now()
+        assert result.tzinfo is not None
+        assert result.tzinfo == UTC
+
+    def test_returns_current_time(self) -> None:
+        before = datetime.now(UTC)
+        result = utc_now()
+        after = datetime.now(UTC)
+        assert before <= result <= after
+
+
+@pytest.mark.unit
+class TestUtcFromTimestamp:
+    """Tests for utc_from_timestamp()."""
+
+    def test_converts_epoch_zero(self) -> None:
+        result = utc_from_timestamp(0)
+        assert result == datetime(1970, 1, 1, tzinfo=UTC)
+
+    def test_returns_aware_datetime(self) -> None:
+        result = utc_from_timestamp(1700000000)
+        assert result.tzinfo == UTC
+
+
+@pytest.mark.unit
+class TestUtcDaysAgo:
+    """Tests for utc_days_ago()."""
+
+    def test_zero_days_ago_is_now(self) -> None:
+        result = utc_days_ago(0)
+        assert abs((utc_now() - result).total_seconds()) < 1
+
+    def test_seven_days_ago(self) -> None:
+        result = utc_days_ago(7)
+        expected = utc_now() - timedelta(days=7)
+        assert abs((expected - result).total_seconds()) < 1
+
+
+@pytest.mark.unit
+class TestFormatIso:
+    """Tests for format_iso()."""
+
+    def test_includes_timezone_offset(self) -> None:
+        dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
+        result = format_iso(dt)
+        assert "+00:00" in result
+        assert result == "2024-01-15T10:30:00+00:00"

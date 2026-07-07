@@ -1,0 +1,46 @@
+# Global exception handler middleware — catches any unhandled exception that
+# escapes the route handlers and converts it into a structured JSON response.
+# This is the outermost safety net; specific exception types should be handled
+# by the exception handlers registered in core/handlers/asgi.py.
+from __future__ import annotations
+
+import logging
+
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+logger = logging.getLogger(__name__)
+
+
+class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
+    """Catch-all middleware that ensures every response is valid JSON.
+
+    Even if an exception escapes all other handlers, this middleware
+    will log it and return a generic 500 JSON response rather than
+    letting the ASGI server emit a plain-text error.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        try:
+            return await call_next(request)
+        except Exception:
+            logger.exception(
+                "Unhandled exception in %s %s",
+                request.method,
+                request.url.path,
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "type": "internal_error",
+                        "status": 500,
+                        "detail": "An unexpected error occurred.",
+                    }
+                },
+            )

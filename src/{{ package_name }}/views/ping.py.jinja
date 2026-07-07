@@ -1,0 +1,21 @@
+# Ping health-check handler — returns service status, version, and environment.
+# This is a complete working example demonstrating the route → view → schema flow.
+from __future__ import annotations
+
+from {{ package_name }}.schemas.response.ping import PingResponse
+from {{ package_name }}.settings import settings
+
+
+async def ping() -> PingResponse:
+    """Health-check endpoint handler.
+
+    Returns basic service information to verify the application is
+    running and responding to requests.  This endpoint is also used
+    by the Docker HEALTHCHECK and Kubernetes liveness probe.
+    """
+    return PingResponse(
+        status="ok",
+        service=settings.PROJECT_NAME,
+        version="0.1.0",
+        environment=settings.ENVIRONMENT,
+    )

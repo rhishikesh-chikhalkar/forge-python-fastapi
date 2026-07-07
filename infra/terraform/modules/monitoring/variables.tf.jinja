@@ -1,0 +1,7 @@
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "cluster_name" { type = string }
+variable "alb_arn_suffix" { type = string; default = "" }
+variable "cpu_alarm_threshold" { type = number; default = 80 }
+variable "memory_alarm_threshold" { type = number; default = 85 }
+variable "error_5xx_threshold" { type = number; default = 10 }

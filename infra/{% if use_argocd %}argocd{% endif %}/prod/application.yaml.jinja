@@ -1,0 +1,24 @@
+# ArgoCD Application manifest for the production environment.
+# NOTE: automated sync is disabled for production — deploys require manual approval.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ project_slug }}-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/you/{{ project_slug }}.git"
+    targetRevision: main
+    path: infra/helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ project_slug }}
+  syncPolicy:
+    # Production uses manual sync — no automated deploys.
+    syncOptions:
+      - CreateNamespace=true

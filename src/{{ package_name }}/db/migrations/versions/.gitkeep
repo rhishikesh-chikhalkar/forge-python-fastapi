@@ -1,0 +1,2 @@
+# This directory holds Alembic migration version scripts.
+# Run `make migration MSG="describe change"` to generate a new one.

@@ -1,0 +1,88 @@
+# Default Helm values for {{ project_slug }}
+# Override per-environment in values-{env}.yaml
+
+replicaCount: 2
+
+image:
+  repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/{{ project_slug }}"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: "{{ project_slug }}-sa"
+  annotations:
+    # This ARN comes from the Terraform EKS module's app_irsa_role_arn output.
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/{{ project_slug }}-dev-app-irsa"
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+  hosts:
+    - host: "api.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+livenessProbe:
+  httpGet:
+    path: /api/v1/ping
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /api/v1/ping
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+env:
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "INFO"
+
+externalSecrets:
+  enabled: true
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: "{{ project_slug }}-secrets"
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef:
+        key: "{{ project_slug }}/dev/app"
+        property: DATABASE_URL
+    - secretKey: SECRET_KEY
+      remoteRef:
+        key: "{{ project_slug }}/dev/app"
+        property: SECRET_KEY
+
+networkPolicy:
+  enabled: true

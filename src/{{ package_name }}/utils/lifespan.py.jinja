@@ -1,0 +1,41 @@
+# ASGI lifespan handler — manages startup and shutdown for the FastAPI application.
+# Opens the database connection pool on startup, closes it on shutdown.
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from {{ package_name }}.db.engines import engine
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan context manager.
+
+    Startup:
+      - Verify the database connection pool is ready.
+      - Log the startup banner.
+
+    Shutdown:
+      - Dispose the SQLAlchemy engine (close all pooled connections).
+      - Run any cleanup tasks.
+    """
+    # --- Startup ---
+    logger.info("Starting %s …", app.title)
+
+    # Verify DB connectivity by checking out and returning a connection
+    async with engine.connect() as conn:
+        await conn.execute(conn.default_isolation_level)  # noqa: implicit connection test
+    logger.info("Database connection pool ready.")
+
+    yield
+
+    # --- Shutdown ---
+    logger.info("Shutting down %s …", app.title)
+    await engine.dispose()
+    logger.info("Database connection pool closed.")

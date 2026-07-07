@@ -1,0 +1,25 @@
+# ArgoCD Application manifest for the staging environment.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ project_slug }}-staging
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/you/{{ project_slug }}.git"
+    targetRevision: main
+    path: infra/helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ project_slug }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

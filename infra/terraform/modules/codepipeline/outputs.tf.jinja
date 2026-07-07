@@ -1,0 +1,14 @@
+output "pipeline_name" {
+  description = "Name of the CodePipeline."
+  value       = aws_codepipeline.main.name
+}
+
+output "codebuild_test_project" {
+  description = "Name of the test CodeBuild project."
+  value       = aws_codebuild_project.test.name
+}
+
+output "codebuild_deploy_project" {
+  description = "Name of the deploy CodeBuild project."
+  value       = aws_codebuild_project.deploy.name
+}

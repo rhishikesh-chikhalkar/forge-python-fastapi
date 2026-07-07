@@ -1,0 +1,100 @@
+# ============================================================================
+# Docker Compose for {{ project_name }}
+# ============================================================================
+# Services: app (hot-reload) + database + Redis
+# Usage:  docker compose -f docker/docker-compose.yaml up -d
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Application — FastAPI with hot-reload
+  # --------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../src:/app/src:cached
+      - ../tests:/app/tests:cached
+    env_file:
+      - ../.env
+    depends_on:
+{% if database != "sqlite" %}
+      db:
+        condition: service_healthy
+{% endif %}
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+{% if database == "postgresql" %}
+  # --------------------------------------------------------------------------
+  # PostgreSQL
+  # --------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: {{ package_name }}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+{% elif database == "mysql" %}
+  # --------------------------------------------------------------------------
+  # MySQL
+  # --------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: {{ package_name }}
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+{% endif %}
+
+  # --------------------------------------------------------------------------
+  # Redis — used for caching{% if use_celery %} and Celery broker{% endif %}
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+{% if database == "postgresql" %}
+volumes:
+  pgdata:
+  redisdata:
+{% elif database == "mysql" %}
+volumes:
+  mysqldata:
+  redisdata:
+{% else %}
+volumes:
+  redisdata:
+{% endif %}

@@ -1,0 +1,77 @@
+# Contributing to {{ project_name }}
+
+Thank you for your interest in contributing! This document explains the
+development workflow and standards for this project.
+
+## Development Setup
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd {{ project_slug }}
+
+# Install dependencies (requires uv — https://docs.astral.sh/uv/)
+make install
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your local values
+```
+
+## Development Workflow
+
+1. **Create a branch** from `main`:
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+
+2. **Write tests first** — this project follows TDD principles:
+   - `tests/unit/` for fast, isolated tests (no I/O)
+   - `tests/integration/` for tests requiring a database
+   - `tests/e2e/` for full HTTP request/response tests
+
+3. **Run the test suite** before committing:
+   ```bash
+   make test          # full suite
+   make test-unit     # fast feedback loop
+   make lint          # ruff linter
+   make typecheck     # mypy
+   ```
+
+4. **Commit with clear messages** following [Conventional Commits](https://www.conventionalcommits.org/):
+   ```
+   feat: add user registration endpoint
+   fix: correct timezone handling in scheduled tasks
+   docs: update deployment guide for EKS
+   ```
+
+5. **Open a Pull Request** against `main` with:
+   - A clear description of what changed and why
+   - Links to related issues
+   - Evidence that tests pass
+
+## Code Standards
+
+- **Formatting**: Handled automatically by ruff (runs via pre-commit)
+- **Linting**: ruff with the rules defined in `pyproject.toml`
+- **Type hints**: All public functions must have type annotations; mypy strict mode is enforced
+- **Architecture**: Follow the hexagonal architecture — domain logic must never import framework code
+- **Imports**: Absolute imports only (`from {{ package_name }}.db.sessions import ...`)
+
+## Project Structure Conventions
+
+| Layer | Rule |
+|-------|------|
+| `domain/` | Pure Python — no FastAPI, SQLAlchemy, or I/O imports |
+| `services/` | Orchestrates domain objects; may call repositories |
+| `repositories/` | Data access only; implements the abstract base interface |
+| `views/` | HTTP handler logic — thin, delegates to services |
+| `urls/` | Route registration only — no business logic |
+
+## Reporting Issues
+
+Please use GitHub Issues and include:
+- Steps to reproduce
+- Expected vs. actual behavior
+- Python version (`python --version`)
+- OS and environment details

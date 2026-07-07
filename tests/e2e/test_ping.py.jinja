@@ -1,0 +1,36 @@
+# End-to-end test for the ping health-check endpoint.
+# Tests the full HTTP request → route → view → schema → response flow.
+from __future__ import annotations
+
+import pytest
+from httpx import AsyncClient
+
+
+@pytest.mark.e2e
+class TestPingEndpoint:
+    """End-to-end tests for GET /api/v1/ping."""
+
+    async def test_ping_returns_200(self, client: AsyncClient) -> None:
+        """The ping endpoint should return HTTP 200."""
+        response = await client.get("/api/v1/ping")
+        assert response.status_code == 200
+
+    async def test_ping_response_shape(self, client: AsyncClient) -> None:
+        """The response must contain status, service, version, and environment."""
+        response = await client.get("/api/v1/ping")
+        data = response.json()
+
+        assert data["status"] == "ok"
+        assert "service" in data
+        assert "version" in data
+        assert "environment" in data
+
+    async def test_ping_status_is_ok(self, client: AsyncClient) -> None:
+        """The status field should always be 'ok' for a healthy service."""
+        response = await client.get("/api/v1/ping")
+        assert response.json()["status"] == "ok"
+
+    async def test_ping_content_type(self, client: AsyncClient) -> None:
+        """The response Content-Type should be application/json."""
+        response = await client.get("/api/v1/ping")
+        assert "application/json" in response.headers["content-type"]

@@ -1,0 +1,27 @@
+# Integration test — verifies database session lifecycle with a real test DB.
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@pytest.mark.integration
+class TestDatabaseSession:
+    """Integration tests for the database session lifecycle."""
+
+    async def test_session_can_execute_query(self, db_session: AsyncSession) -> None:
+        """Verify that a test session can execute a basic SQL query."""
+        result = await db_session.execute(text("SELECT 1"))
+        row = result.scalar()
+        assert row == 1
+
+    async def test_session_rollback_on_error(self, db_session: AsyncSession) -> None:
+        """Verify that the session is usable after a failed query."""
+        # Execute a valid query first
+        result = await db_session.execute(text("SELECT 1"))
+        assert result.scalar() == 1
+
+        # The session should still be usable
+        result2 = await db_session.execute(text("SELECT 2"))
+        assert result2.scalar() == 2

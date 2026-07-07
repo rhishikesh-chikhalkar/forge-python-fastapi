@@ -1,0 +1,14 @@
+# Terraform remote state backend — stores state in S3 with DynamoDB locking.
+# This prevents state corruption when multiple engineers run Terraform concurrently.
+# The S3 bucket and DynamoDB table must be created before first `terraform init`.
+# See infra/README.md for bootstrap instructions.
+
+terraform {
+  backend "s3" {
+    bucket         = "{{ project_slug }}-terraform-state"
+    key            = "global/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "{{ project_slug }}-terraform-locks"
+    encrypt        = true
+  }
+}
