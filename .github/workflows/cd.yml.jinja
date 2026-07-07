@@ -1,0 +1,22 @@
+name: CD (Post-Merge)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    name: Post-Merge Actions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Post-merge placeholder
+        run: |
+          echo "🚀 Code has been merged to main!"
+          echo "AWS CodePipeline (via CodeStar connection) is handling the actual deployment to EKS."
+          echo "You can use this workflow to send Slack/Discord notifications, update Jira tickets, etc."
+          # example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Merge to main!"}' ${{ secrets.SLACK_WEBHOOK_URL }}

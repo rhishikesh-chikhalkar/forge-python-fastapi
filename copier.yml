@@ -1,11 +1,11 @@
 # ============================================================================
-# forge-python-generic — Copier Template Configuration
+# forge-python-fastapi — Copier Template Configuration
 # ============================================================================
 # A production-grade FastAPI project generator with hexagonal architecture,
 # AWS EKS infrastructure, Helm charts, and CI/CD pipelines.
 #
 # Usage:
-#   copier copy gh:you/forge-python-generic my-new-project
+#   copier copy gh:rhishikesh-chikhalkar/forge-python-fastapi my-new-project
 #   copier update   (from inside a generated project to pull template changes)
 # ============================================================================
 
@@ -33,7 +33,7 @@ _answers_file: .copier-answers.yml
 _tasks:
   - "git init"
   - "git add ."
-  - 'git commit -m "Initial commit from forge-python-generic template"'
+  - 'git commit -m "Initial commit from forge-python-fastapi template"'
   - "uv sync"
   - "pre-commit install"
   - >-
@@ -141,6 +141,14 @@ author_email:
   validator: >-
     {% if '@' not in author_email or '.' not in author_email.split('@')[-1] %}
     Must be a valid email address (e.g. dev@example.com).
+    {% endif %}
+
+github_username:
+  type: str
+  help: "GitHub username or organization name (used for repository URLs)."
+  validator: >-
+    {% if not github_username %}
+    GitHub username is required.
     {% endif %}
 
 python_version:

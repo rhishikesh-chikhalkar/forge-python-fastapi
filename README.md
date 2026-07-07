@@ -12,7 +12,7 @@ This template generates a robust backend project following hexagonal architectur
 - **Docker** multi-stage builds (dev/prod)
 - **Terraform** for AWS EKS, VPC, ECR, Secrets Manager, CloudWatch
 - **Helm** chart with IRSA, HPA, and External Secrets integration
-- **CI/CD** via AWS CodePipeline (or GitHub Actions ready)
+- **CI/CD** via AWS CodePipeline and **GitHub Actions** (CI, CD, Release workflows)
 - **Celery** support (optional)
 - **ArgoCD** GitOps manifests (optional)
 
@@ -31,7 +31,7 @@ uv tool install copier
 ### 2. Generate a Project
 
 ```bash
-copier copy gh:you/forge-python-generic my-new-project
+copier copy gh:rhishikesh-chikhalkar/forge-python-fastapi my-new-project
 # Answer the prompts (project_name, author, database, etc.)
 ```
 
