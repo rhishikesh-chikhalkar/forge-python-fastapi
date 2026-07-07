@@ -1,5 +1,10 @@
 # forge-python-fastapi
 
+[![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-orange.json)](https://github.com/copier-org/copier)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0+-00a393.svg)](https://fastapi.tiangolo.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A production-grade FastAPI starter project generator built with [Copier](https://copier.readthedocs.io/).
 
 This template generates a robust backend project following hexagonal architecture, ready for deployment to AWS EKS with Terraform and Helm.
