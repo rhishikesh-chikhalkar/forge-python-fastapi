@@ -4,7 +4,11 @@
 replicaCount: 2
 
 image:
+{% if cloud_provider == 'aws' %}
   repository: "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/{{ project_slug }}"
+{% elif cloud_provider == 'oci' %}
+  repository: "us-ashburn-1.ocir.io/NAMESPACE/{{ project_slug }}"
+{% endif %}
   tag: "latest"
   pullPolicy: IfNotPresent
 
@@ -12,8 +16,14 @@ serviceAccount:
   create: true
   name: "{{ project_slug }}-sa"
   annotations:
+{% if cloud_provider == 'aws' %}
     # This ARN comes from the Terraform EKS module's app_irsa_role_arn output.
     eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/{{ project_slug }}-dev-app-irsa"
+{% elif cloud_provider == 'oci' %}
+    # OKE workload identity — pods authenticate via instance principals.
+    # Configure matching OCI dynamic group policies for the node pool.
+    oke.oraclecloud.com/workload-identity: "true"
+{% endif %}
 
 service:
   type: ClusterIP
@@ -21,6 +31,7 @@ service:
 
 ingress:
   enabled: true
+{% if cloud_provider == 'aws' %}
   className: alb
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -28,6 +39,12 @@ ingress:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
     alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
     alb.ingress.kubernetes.io/ssl-redirect: "443"
+{% elif cloud_provider == 'oci' %}
+  className: oci-native-ingress
+  annotations:
+    oci-native-ingress.oraclecloud.com/load-balancer-type: "lb"
+    oci-native-ingress.oraclecloud.com/certificate-ocid: "CERT_OCID"
+{% endif %}
   hosts:
     - host: "api.example.com"
       paths:
@@ -69,6 +86,7 @@ env:
 
 externalSecrets:
   enabled: true
+{% if cloud_provider == 'aws' %}
   secretStoreRef:
     name: aws-secrets-manager
     kind: ClusterSecretStore
@@ -83,6 +101,20 @@ externalSecrets:
       remoteRef:
         key: "{{ project_slug }}/dev/app"
         property: SECRET_KEY
+{% elif cloud_provider == 'oci' %}
+  secretStoreRef:
+    name: oci-vault
+    kind: ClusterSecretStore
+  target:
+    name: "{{ project_slug }}-secrets"
+  data:
+    - secretKey: DATABASE_URL
+      remoteRef:
+        key: "{{ project_slug }}-dev-database-url"
+    - secretKey: SECRET_KEY
+      remoteRef:
+        key: "{{ project_slug }}-dev-secret-key"
+{% endif %}
 
 networkPolicy:
   enabled: true

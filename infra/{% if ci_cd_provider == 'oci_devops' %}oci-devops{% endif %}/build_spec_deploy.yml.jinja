@@ -1,0 +1,67 @@
+# OCI DevOps build spec — build Docker image, push to OCIR, deploy via Helm.
+version: 0.1
+component: build
+timeoutInSeconds: 900
+shell: bash
+
+env:
+  exportedVariables:
+    - IMAGE_TAG
+    - OCIR_REPO_URL
+
+steps:
+  - type: Command
+    name: "Set image tag"
+    command: |
+      COMMIT_HASH=$(echo ${OCI_TRIGGER_COMMIT_HASH} | cut -c 1-7)
+      IMAGE_TAG=${COMMIT_HASH:-latest}
+      OCIR_REPO_URL=${OCIR_REPO_URL}
+      echo "Image tag: ${IMAGE_TAG}"
+      echo "OCIR repo: ${OCIR_REPO_URL}"
+
+  - type: Command
+    name: "Log in to OCIR"
+    command: |
+      echo "Logging into OCIR..."
+      docker login ${OCI_REGION}.ocir.io \
+        -u "${OCIR_NAMESPACE}/oracleidentitycloudservice/${OCIR_USER}" \
+        -p "${OCIR_AUTH_TOKEN}"
+
+  - type: Command
+    name: "Build Docker image"
+    command: |
+      echo "Building Docker image..."
+      docker build -f docker/Dockerfile \
+        -t ${OCIR_REPO_URL}:${IMAGE_TAG} \
+        -t ${OCIR_REPO_URL}:latest \
+        .
+
+  - type: Command
+    name: "Push to OCIR"
+    command: |
+      echo "Pushing to OCIR..."
+      docker push ${OCIR_REPO_URL}:${IMAGE_TAG}
+      docker push ${OCIR_REPO_URL}:latest
+
+  - type: Command
+    name: "Configure kubectl for OKE"
+    command: |
+      echo "Configuring kubectl..."
+      oci ce cluster create-kubeconfig \
+        --cluster-id ${OKE_CLUSTER_ID} \
+        --file $HOME/.kube/config \
+        --region ${OCI_REGION} \
+        --token-version 2.0.0
+
+  - type: Command
+    name: "Deploy via Helm"
+    command: |
+      echo "Deploying via Helm..."
+      helm upgrade --install {{ project_slug }} infra/helm/ \
+        --namespace {{ project_slug }} \
+        --create-namespace \
+        --set image.repository=${OCIR_REPO_URL} \
+        --set image.tag=${IMAGE_TAG} \
+        --wait \
+        --timeout 300s
+      echo "Deployment complete!"

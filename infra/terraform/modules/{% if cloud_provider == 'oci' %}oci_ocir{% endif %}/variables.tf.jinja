@@ -1,0 +1,20 @@
+variable "compartment_id" {
+  description = "OCI compartment OCID."
+  type        = string
+}
+
+variable "project_name" {
+  description = "Project name, used for repository naming."
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment."
+  type        = string
+}
+
+variable "region" {
+  description = "OCI region for constructing the OCIR endpoint."
+  type        = string
+  default     = "us-ashburn-1"
+}

@@ -1,0 +1,41 @@
+# OCIR module — OCI Container Registry for storing Docker images.
+# Images are pushed here by the CI/CD pipeline and pulled by OKE.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Container Repository — stores Docker images for the application
+# ---------------------------------------------------------------------------
+resource "oci_artifacts_container_repository" "app" {
+  compartment_id = var.compartment_id
+  display_name   = var.project_name
+  is_public      = false
+  is_immutable   = false
+
+  # Readme for repository documentation
+  readme {
+    content = "Container images for ${var.project_name} (${var.environment})"
+    format  = "text/plain"
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Container Image Lifecycle — clean up old untagged images
+# ---------------------------------------------------------------------------
+resource "oci_artifacts_container_configuration" "config" {
+  compartment_id                      = var.compartment_id
+  is_repository_created_on_first_push = true
+}

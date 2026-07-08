@@ -1,0 +1,146 @@
+# OCI DevOps module — CI/CD pipeline for building, testing, and deploying.
+# Integrates OCI DevOps Build Pipelines and Deployment Pipelines.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# DevOps Project — top-level container for pipelines
+# ---------------------------------------------------------------------------
+resource "oci_devops_project" "main" {
+  compartment_id = var.compartment_id
+  name           = "${var.project_name}-${var.environment}"
+  description    = "DevOps project for ${var.project_name} (${var.environment})"
+
+  notification_config {
+    topic_id = var.notification_topic_id
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# External Connection — GitHub repository
+# ---------------------------------------------------------------------------
+resource "oci_devops_connection" "github" {
+  connection_type = "GITHUB_ACCESS_TOKEN"
+  project_id      = oci_devops_project.main.id
+  display_name    = "${var.project_name}-github"
+  description     = "GitHub connection for ${var.project_name}"
+
+  access_token = var.github_pat_secret_id
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Build Pipeline — test, build Docker image, push to OCIR
+# ---------------------------------------------------------------------------
+resource "oci_devops_build_pipeline" "main" {
+  project_id   = oci_devops_project.main.id
+  display_name = "${var.project_name}-${var.environment}-build"
+  description  = "Build pipeline for ${var.project_name}"
+
+  build_pipeline_parameters {
+    items {
+      name          = "OCIR_REPO_URL"
+      default_value = var.ocir_repository_path
+    }
+    items {
+      name          = "OKE_CLUSTER_ID"
+      default_value = var.oke_cluster_id
+    }
+    items {
+      name          = "OCI_REGION"
+      default_value = var.region
+    }
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Build Pipeline Stage — lint + test
+# ---------------------------------------------------------------------------
+resource "oci_devops_build_pipeline_stage" "test" {
+  build_pipeline_id = oci_devops_build_pipeline.main.id
+  display_name      = "LintAndTest"
+  description       = "Run linting and tests"
+
+  build_pipeline_stage_type               = "BUILD"
+  image                                   = "OL7_X86_64_STANDARD_10"
+  stage_execution_timeout_in_seconds      = 600
+  build_spec_file                         = "infra/oci-devops/build_spec.yml"
+  primary_build_source                    = "github-source"
+  is_pass_all_parameters_enabled          = true
+
+  build_source_collection {
+    items {
+      connection_type = "GITHUB"
+      connection_id   = oci_devops_connection.github.id
+      name            = "github-source"
+      repository_url  = var.github_repo_url
+      branch          = var.github_branch
+    }
+  }
+
+  build_pipeline_stage_predecessor_collection {
+    items {
+      id = oci_devops_build_pipeline.main.id
+    }
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Build Pipeline Stage — build Docker image + push to OCIR
+# ---------------------------------------------------------------------------
+resource "oci_devops_build_pipeline_stage" "build_and_push" {
+  build_pipeline_id = oci_devops_build_pipeline.main.id
+  display_name      = "BuildAndPush"
+  description       = "Build Docker image and push to OCIR"
+
+  build_pipeline_stage_type               = "BUILD"
+  image                                   = "OL7_X86_64_STANDARD_10"
+  stage_execution_timeout_in_seconds      = 900
+  build_spec_file                         = "infra/oci-devops/build_spec_deploy.yml"
+  primary_build_source                    = "github-source"
+  is_pass_all_parameters_enabled          = true
+
+  build_source_collection {
+    items {
+      connection_type = "GITHUB"
+      connection_id   = oci_devops_connection.github.id
+      name            = "github-source"
+      repository_url  = var.github_repo_url
+      branch          = var.github_branch
+    }
+  }
+
+  build_pipeline_stage_predecessor_collection {
+    items {
+      id = oci_devops_build_pipeline_stage.test.id
+    }
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}

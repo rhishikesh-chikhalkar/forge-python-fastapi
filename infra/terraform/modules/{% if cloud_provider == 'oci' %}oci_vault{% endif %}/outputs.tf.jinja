@@ -1,0 +1,14 @@
+output "vault_id" {
+  description = "OCID of the OCI Vault."
+  value       = oci_kms_vault.app.id
+}
+
+output "master_key_id" {
+  description = "OCID of the master encryption key."
+  value       = oci_kms_key.master.id
+}
+
+output "vault_management_endpoint" {
+  description = "Management endpoint URL for the vault."
+  value       = oci_kms_vault.app.management_endpoint
+}

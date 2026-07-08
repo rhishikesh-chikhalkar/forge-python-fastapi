@@ -128,8 +128,15 @@ copier update --trust
 
 See [infra/README.md](infra/README.md) for detailed deployment instructions covering:
 - GitHub Actions workflows for CI (tests), CD (post-merge), and Release (auto-tag)
-- Terraform modules (VPC, EKS, ECR, Secrets Manager, Monitoring, CodePipeline)
-- Helm chart for Kubernetes deployments
+{% if cloud_provider == 'aws' %}
+- Terraform modules (VPC, EKS, ECR, Secrets Manager, Monitoring{% if ci_cd_provider == 'aws_codepipeline' %}, CodePipeline{% endif %})
+{% elif cloud_provider == 'oci' %}
+- Terraform modules (VCN, OKE, OCIR, Vault, Monitoring{% if ci_cd_provider == 'oci_devops' %}, OCI DevOps{% endif %})
+{% endif %}
+{% if ci_cd_provider == 'aws_codepipeline' %}- AWS CodePipeline for automated build and deployment
+{% elif ci_cd_provider == 'oci_devops' %}- OCI DevOps pipelines for automated build and deployment
+{% elif ci_cd_provider == 'github_actions' %}- GitHub Actions for full CI/CD (build, push, deploy)
+{% endif %}- Helm chart for Kubernetes deployments
 - Per-environment configurations (dev, staging, prod)
 {% if use_argocd %}- ArgoCD GitOps manifests{% endif %}
 

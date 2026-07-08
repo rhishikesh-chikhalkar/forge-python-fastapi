@@ -1,0 +1,7 @@
+variable "project_name" { type = string; default = "{{ project_slug }}" }
+variable "region" { type = string; default = "us-ashburn-1" }
+variable "compartment_id" { type = string; default = "{{ oci_compartment_id }}" }
+variable "oci_namespace" { type = string; description = "OCI Object Storage namespace for your tenancy." }
+variable "database_url" { type = string; sensitive = true }
+variable "secret_key" { type = string; sensitive = true; default = "dev-secret-key" }
+variable "node_image_id" { type = string; description = "OCID of the Oracle Linux image for OKE worker nodes." }

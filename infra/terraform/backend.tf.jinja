@@ -1,3 +1,4 @@
+{% if cloud_provider == 'aws' %}
 # Terraform remote state backend — stores state in S3 with DynamoDB locking.
 # This prevents state corruption when multiple engineers run Terraform concurrently.
 # The S3 bucket and DynamoDB table must be created before first `terraform init`.
@@ -12,3 +13,22 @@ terraform {
     encrypt        = true
   }
 }
+{% elif cloud_provider == 'oci' %}
+# Terraform remote state backend — stores state in OCI Object Storage via S3-compatible API.
+# OCI Object Storage supports the S3 API, so we use the standard S3 backend with
+# OCI-specific endpoint overrides.
+# The Object Storage bucket must be created before first `terraform init`.
+# See infra/README.md for bootstrap instructions.
+
+terraform {
+  backend "s3" {
+    bucket                      = "{{ project_slug }}-terraform-state"
+    key                         = "global/terraform.tfstate"
+    region                      = "us-ashburn-1"
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    force_path_style            = true
+  }
+}
+{% endif %}

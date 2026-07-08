@@ -1,0 +1,14 @@
+output "repository_id" {
+  description = "OCID of the container repository."
+  value       = oci_artifacts_container_repository.app.id
+}
+
+output "repository_path" {
+  description = "Full OCIR path for docker push/pull (region.ocir.io/namespace/repo)."
+  value       = "${var.region}.ocir.io/${oci_artifacts_container_repository.app.namespace}/${var.project_name}"
+}
+
+output "repository_namespace" {
+  description = "Object Storage namespace used by OCIR."
+  value       = oci_artifacts_container_repository.app.namespace
+}

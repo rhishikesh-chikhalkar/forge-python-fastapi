@@ -6,6 +6,94 @@ on:
       - main
 
 jobs:
+{% if ci_cd_provider == 'github_actions' %}
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+{% if cloud_provider == 'aws' %}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: {% raw %}${{ secrets.AWS_ACCESS_KEY_ID }}{% endraw %}
+          aws-secret-access-key: {% raw %}${{ secrets.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: {% raw %}${{ steps.ecr-login.outputs.registry }}{% endraw %}
+          IMAGE_TAG: {% raw %}${{ github.sha }}{% endraw %}
+        run: |
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/{{ project_slug }}:$IMAGE_TAG -t $ECR_REGISTRY/{{ project_slug }}:latest .
+          docker push $ECR_REGISTRY/{{ project_slug }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/{{ project_slug }}:latest
+
+      - name: Deploy to EKS via Helm
+        env:
+          IMAGE_TAG: {% raw %}${{ github.sha }}{% endraw %}
+          ECR_REGISTRY: {% raw %}${{ steps.ecr-login.outputs.registry }}{% endraw %}
+        run: |
+          aws eks update-kubeconfig --name {{ project_slug }}-dev --region us-east-1
+          helm upgrade --install {{ project_slug }} infra/helm/ \
+            --namespace {{ project_slug }} \
+            --create-namespace \
+            --set image.repository=$ECR_REGISTRY/{{ project_slug }} \
+            --set image.tag=$IMAGE_TAG \
+            --wait --timeout 300s
+{% elif cloud_provider == 'oci' %}
+      - name: Configure OCI CLI
+        uses: oracle-actions/configure-oci-cli@v1
+        with:
+          user: {% raw %}${{ secrets.OCI_USER_OCID }}{% endraw %}
+          fingerprint: {% raw %}${{ secrets.OCI_FINGERPRINT }}{% endraw %}
+          tenancy: {% raw %}${{ secrets.OCI_TENANCY_OCID }}{% endraw %}
+          region: us-ashburn-1
+          key_content: {% raw %}${{ secrets.OCI_PRIVATE_KEY }}{% endraw %}
+
+      - name: Login to OCIR
+        env:
+          OCI_REGION: us-ashburn-1
+        run: |
+          echo "{% raw %}${{ secrets.OCI_AUTH_TOKEN }}{% endraw %}" | docker login ${OCI_REGION}.ocir.io \
+            --username "{% raw %}${{ secrets.OCI_NAMESPACE }}{% endraw %}/{% raw %}${{ secrets.OCI_USERNAME }}{% endraw %}" \
+            --password-stdin
+
+      - name: Build and push Docker image
+        env:
+          OCIR_REPO: us-ashburn-1.ocir.io/{% raw %}${{ secrets.OCI_NAMESPACE }}{% endraw %}/{{ project_slug }}
+          IMAGE_TAG: {% raw %}${{ github.sha }}{% endraw %}
+        run: |
+          docker build -f docker/Dockerfile -t $OCIR_REPO:$IMAGE_TAG -t $OCIR_REPO:latest .
+          docker push $OCIR_REPO:$IMAGE_TAG
+          docker push $OCIR_REPO:latest
+
+      - name: Deploy to OKE via Helm
+        env:
+          OCIR_REPO: us-ashburn-1.ocir.io/{% raw %}${{ secrets.OCI_NAMESPACE }}{% endraw %}/{{ project_slug }}
+          IMAGE_TAG: {% raw %}${{ github.sha }}{% endraw %}
+        run: |
+          oci ce cluster create-kubeconfig \
+            --cluster-id {% raw %}${{ secrets.OKE_CLUSTER_ID }}{% endraw %} \
+            --file $HOME/.kube/config \
+            --region us-ashburn-1 \
+            --token-version 2.0.0
+          helm upgrade --install {{ project_slug }} infra/helm/ \
+            --namespace {{ project_slug }} \
+            --create-namespace \
+            --set image.repository=$OCIR_REPO \
+            --set image.tag=$IMAGE_TAG \
+            --wait --timeout 300s
+{% endif %}
+
+{% elif ci_cd_provider == 'aws_codepipeline' %}
   notify:
     name: Post-Merge Actions
     runs-on: ubuntu-latest
@@ -19,4 +107,21 @@ jobs:
           echo "🚀 Code has been merged to main!"
           echo "AWS CodePipeline (via CodeStar connection) is handling the actual deployment to EKS."
           echo "You can use this workflow to send Slack/Discord notifications, update Jira tickets, etc."
-          # example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Merge to main!"}' ${{ secrets.SLACK_WEBHOOK_URL }}
+          # example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Merge to main!"}' {% raw %}${{ secrets.SLACK_WEBHOOK_URL }}{% endraw %}
+
+{% elif ci_cd_provider == 'oci_devops' %}
+  notify:
+    name: Post-Merge Actions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Post-merge placeholder
+        run: |
+          echo "🚀 Code has been merged to main!"
+          echo "OCI DevOps Build Pipeline is handling the actual deployment to OKE."
+          echo "You can use this workflow to send Slack/Discord notifications, update Jira tickets, etc."
+          # example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Merge to main!"}' {% raw %}${{ secrets.SLACK_WEBHOOK_URL }}{% endraw %}
+{% endif %}

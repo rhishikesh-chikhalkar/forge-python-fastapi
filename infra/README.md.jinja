@@ -6,6 +6,7 @@ This directory contains all infrastructure-as-code and deployment configuration.
 
 ```
 infra/
+{% if cloud_provider == 'aws' %}
 ├── terraform/
 │   ├── backend.tf              # S3 + DynamoDB remote state configuration
 │   ├── modules/
@@ -14,20 +15,38 @@ infra/
 │   │   ├── ecr/                # Container registry + lifecycle policies
 │   │   ├── secrets/            # AWS Secrets Manager
 │   │   ├── monitoring/         # CloudWatch alarms
-│   │   └── codepipeline/       # CodeBuild + CodePipeline CI/CD
-│   └── environments/
+{% if ci_cd_provider == 'aws_codepipeline' %}│   │   └── codepipeline/       # CodeBuild + CodePipeline CI/CD
+{% endif %}│   └── environments/
 │       ├── dev/                # Development environment
 │       ├── staging/            # Staging environment
 │       └── prod/               # Production environment
+{% elif cloud_provider == 'oci' %}
+├── terraform/
+│   ├── backend.tf              # OCI Object Storage remote state (S3-compat)
+│   ├── modules/
+│   │   ├── oci_vcn/            # VCN, subnets, gateways, security lists
+│   │   ├── oci_oke/            # OKE cluster + managed node pool
+│   │   ├── oci_ocir/           # Container registry
+│   │   ├── oci_vault/          # OCI Vault + secrets
+│   │   ├── oci_monitoring/     # Monitoring alarms + ONS notifications
+{% if ci_cd_provider == 'oci_devops' %}│   │   └── oci_devops/         # OCI DevOps build + deploy pipelines
+{% endif %}│   └── environments/
+│       ├── oci-dev/            # Development environment
+│       ├── oci-staging/        # Staging environment
+│       └── oci-prod/           # Production environment
+{% endif %}
 ├── helm/
 │   ├── Chart.yaml              # Helm chart metadata
 │   ├── values.yaml             # Default values
 │   ├── values-{env}.yaml       # Per-environment overrides
 │   └── templates/              # Kubernetes manifests
-├── codepipeline/
+{% if ci_cd_provider == 'aws_codepipeline' %}├── codepipeline/
 │   ├── buildspec.yml           # Lint + test stage
 │   └── buildspec-deploy.yml    # Build + deploy stage
-{% if use_argocd %}├── argocd/
+{% elif ci_cd_provider == 'oci_devops' %}├── oci-devops/
+│   ├── build_spec.yml          # Lint + test stage
+│   └── build_spec_deploy.yml   # Build + deploy stage
+{% endif %}{% if use_argocd %}├── argocd/
 │   ├── dev/                    # ArgoCD Application for dev
 │   ├── staging/                # ArgoCD Application for staging
 │   └── prod/                   # ArgoCD Application for prod
@@ -38,6 +57,7 @@ infra/
 
 Deploy environments in this exact order:
 
+{% if cloud_provider == 'aws' %}
 ### 1. Bootstrap Remote State
 
 ```bash
@@ -94,6 +114,64 @@ helm upgrade --install {{ project_slug }} infra/helm/ \
   --create-namespace
 ```
 
+{% elif cloud_provider == 'oci' %}
+### 1. Bootstrap Remote State
+
+```bash
+# One-time setup: create an OCI Object Storage bucket for Terraform state.
+oci os bucket create \
+  --compartment-id {{ oci_compartment_id }} \
+  --name {{ project_slug }}-terraform-state \
+  --region us-ashburn-1
+```
+
+### 2. Deploy Dev Environment
+
+```bash
+cd infra/terraform/environments/oci-dev
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### 3. Deploy Staging Environment
+
+```bash
+cd infra/terraform/environments/oci-staging
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### 4. Deploy Production Environment
+
+```bash
+cd infra/terraform/environments/oci-prod
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### 5. Install the Helm Chart
+
+After Terraform creates the OKE cluster:
+
+```bash
+# Configure kubectl for OKE
+oci ce cluster create-kubeconfig \
+  --cluster-id <CLUSTER_OCID> \
+  --file $HOME/.kube/config \
+  --region us-ashburn-1 \
+  --token-version 2.0.0
+
+# Install the chart
+helm upgrade --install {{ project_slug }} infra/helm/ \
+  -f infra/helm/values-dev.yaml \
+  --namespace {{ project_slug }} \
+  --create-namespace
+```
+{% endif %}
+
 {% if use_argocd %}
 ### 6. Deploy ArgoCD Applications
 
@@ -106,6 +184,7 @@ kubectl apply -f infra/argocd/prod/application.yaml
 
 ## Key Design Decisions
 
+{% if cloud_provider == 'aws' %}
 - **IRSA (IAM Roles for Service Accounts)**: Pods authenticate to AWS services
   via IRSA — no static credentials needed. The Terraform EKS module creates
   the OIDC provider and IAM role; the Helm service account references it.
@@ -118,3 +197,23 @@ kubectl apply -f infra/argocd/prod/application.yaml
 
 - **Remote State**: Terraform state is stored in S3 with DynamoDB locking
   to prevent concurrent modifications.
+{% elif cloud_provider == 'oci' %}
+- **Instance Principals / Workload Identity**: Pods authenticate to OCI services
+  via workload identity backed by dynamic group policies — no static credentials
+  needed. The Terraform OKE module configures the node pool; matching dynamic
+  group policies grant access to Vault, OCIR, and other OCI services.
+
+- **External Secrets**: Kubernetes Secrets are synced from OCI Vault
+  via the External Secrets Operator, keeping sensitive data out of Git.
+
+- **OCIR Registry**: Container images are stored in OCI Container Registry.
+  Configure lifecycle policies in the OCI console to clean up old images.
+
+- **Remote State**: Terraform state is stored in OCI Object Storage using the
+  S3-compatible API. Object versioning provides protection against accidental
+  state corruption.
+
+- **Always Free Tier**: Dev environments use `VM.Standard.A1.Flex` shapes
+  (1 OCPU, 6 GB RAM) which are eligible for OCI's Always Free programme,
+  keeping development costs at zero.
+{% endif %}

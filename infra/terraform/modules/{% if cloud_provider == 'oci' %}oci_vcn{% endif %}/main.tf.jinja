@@ -1,0 +1,246 @@
+# OCI VCN module — creates an isolated virtual cloud network for the OKE cluster.
+# The VCN includes public subnets (for load balancers) and private subnets
+# (for OKE worker nodes and databases), spread across multiple availability
+# domains for high availability.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# Fetch available Availability Domains in the tenancy.
+data "oci_identity_availability_domains" "ads" {
+  compartment_id = var.compartment_id
+}
+
+# ---------------------------------------------------------------------------
+# VCN — the top-level network container
+# ---------------------------------------------------------------------------
+resource "oci_core_vcn" "main" {
+  compartment_id = var.compartment_id
+  display_name   = "${var.project_name}-vcn"
+  cidr_blocks    = [var.vcn_cidr]
+  dns_label      = replace(var.project_name, "-", "")
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Internet Gateway — allows public subnet resources to reach the internet
+# ---------------------------------------------------------------------------
+resource "oci_core_internet_gateway" "main" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-igw"
+  enabled        = true
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# NAT Gateway — allows private subnet resources outbound internet access
+# ---------------------------------------------------------------------------
+resource "oci_core_nat_gateway" "main" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-nat"
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Service Gateway — allows private subnets to reach OCI services privately
+# ---------------------------------------------------------------------------
+data "oci_core_services" "all" {
+  filter {
+    name   = "name"
+    values = ["All .* Services In Oracle Services Network"]
+    regex  = true
+  }
+}
+
+resource "oci_core_service_gateway" "main" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-sgw"
+
+  services {
+    service_id = data.oci_core_services.all.services[0].id
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Route Tables
+# ---------------------------------------------------------------------------
+resource "oci_core_route_table" "public" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-public-rt"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    network_entity_id = oci_core_internet_gateway.main.id
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+resource "oci_core_route_table" "private" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-private-rt"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    network_entity_id = oci_core_nat_gateway.main.id
+  }
+
+  route_rules {
+    destination       = data.oci_core_services.all.services[0].cidr_block
+    destination_type  = "SERVICE_CIDR_BLOCK"
+    network_entity_id = oci_core_service_gateway.main.id
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Security Lists
+# ---------------------------------------------------------------------------
+resource "oci_core_security_list" "public" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-public-sl"
+
+  # Allow all egress
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+    stateless   = false
+  }
+
+  # Allow HTTPS ingress
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "6" # TCP
+    stateless = false
+    tcp_options {
+      min = 443
+      max = 443
+    }
+  }
+
+  # Allow HTTP ingress
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "6"
+    stateless = false
+    tcp_options {
+      min = 80
+      max = 80
+    }
+  }
+
+  # Allow Kubernetes API access
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "6"
+    stateless = false
+    tcp_options {
+      min = 6443
+      max = 6443
+    }
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+resource "oci_core_security_list" "private" {
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-private-sl"
+
+  # Allow all egress
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+    stateless   = false
+  }
+
+  # Allow all traffic from within the VCN
+  ingress_security_rules {
+    source   = var.vcn_cidr
+    protocol = "all"
+    stateless = false
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Public subnets — host the load balancers
+# ---------------------------------------------------------------------------
+resource "oci_core_subnet" "public" {
+  count = var.ad_count
+
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-public-${count.index}"
+  cidr_block     = cidrsubnet(var.vcn_cidr, 8, count.index)
+  route_table_id = oci_core_route_table.public.id
+  security_list_ids = [oci_core_security_list.public.id]
+  dns_label      = "pub${count.index}"
+
+  # Public subnets allow public IPs
+  prohibit_public_ip_on_vnic = false
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Private subnets — host OKE worker nodes and databases
+# ---------------------------------------------------------------------------
+resource "oci_core_subnet" "private" {
+  count = var.ad_count
+
+  compartment_id = var.compartment_id
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${var.project_name}-private-${count.index}"
+  cidr_block     = cidrsubnet(var.vcn_cidr, 8, count.index + var.ad_count)
+  route_table_id = oci_core_route_table.private.id
+  security_list_ids = [oci_core_security_list.private.id]
+  dns_label      = "priv${count.index}"
+
+  # Private subnets do not allow public IPs
+  prohibit_public_ip_on_vnic = true
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}

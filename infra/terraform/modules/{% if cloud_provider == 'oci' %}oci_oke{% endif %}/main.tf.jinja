@@ -1,0 +1,110 @@
+# OKE module — provisions a managed Kubernetes cluster on Oracle Cloud.
+# Worker nodes run in private subnets; the API endpoint is public by default.
+# Dev environments use Always Free-eligible shapes (VM.Standard.A1.Flex).
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# Fetch available Availability Domains
+data "oci_identity_availability_domains" "ads" {
+  compartment_id = var.compartment_id
+}
+
+# Fetch the latest OKE-compatible Oracle Linux image for the node shape
+data "oci_containerengine_node_pool_option" "opts" {
+  node_pool_option_id = "all"
+  compartment_id      = var.compartment_id
+}
+
+# ---------------------------------------------------------------------------
+# OKE Cluster
+# ---------------------------------------------------------------------------
+resource "oci_containerengine_cluster" "main" {
+  compartment_id     = var.compartment_id
+  name               = "${var.project_name}-${var.environment}"
+  kubernetes_version = var.kubernetes_version
+  vcn_id             = var.vcn_id
+  type               = "ENHANCED_CLUSTER"
+
+  endpoint_config {
+    is_public_ip_enabled = true
+    subnet_id            = var.public_subnet_ids[0]
+  }
+
+  cluster_pod_network_options {
+    cni_type = "FLANNEL_OVERLAY"
+  }
+
+  options {
+    service_lb_subnet_ids = var.public_subnet_ids
+
+    kubernetes_network_config {
+      pods_cidr     = "10.244.0.0/16"
+      services_cidr = "10.96.0.0/16"
+    }
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Managed Node Pool — auto-scaling worker nodes
+# ---------------------------------------------------------------------------
+resource "oci_containerengine_node_pool" "main" {
+  compartment_id     = var.compartment_id
+  cluster_id         = oci_containerengine_cluster.main.id
+  name               = "${var.project_name}-nodes"
+  kubernetes_version = var.kubernetes_version
+  node_shape         = var.node_shape
+
+  # Flex shape configuration (OCPUs and memory)
+  node_shape_config {
+    ocpus         = var.node_ocpus
+    memory_in_gbs = var.node_memory_gb
+  }
+
+  node_config_details {
+    size = var.node_count
+
+    # Spread nodes across availability domains
+    dynamic "placement_configs" {
+      for_each = slice(
+        data.oci_identity_availability_domains.ads.availability_domains,
+        0,
+        min(length(data.oci_identity_availability_domains.ads.availability_domains), length(var.private_subnet_ids))
+      )
+      content {
+        availability_domain = placement_configs.value.name
+        subnet_id           = var.private_subnet_ids[placement_configs.key]
+      }
+    }
+
+    freeform_tags = {
+      Environment = var.environment
+    }
+  }
+
+  node_source_details {
+    source_type = "IMAGE"
+    image_id    = var.node_image_id
+  }
+
+  initial_node_labels {
+    key   = "app"
+    value = var.project_name
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}

@@ -170,6 +170,33 @@ use_argocd:
   help: "Use GitOps pull-based deploys via ArgoCD?"
   default: false
 
+cloud_provider:
+  type: str
+  help: >-
+    Target cloud provider for infrastructure (networking, Kubernetes,
+    container registry, secrets, monitoring).
+  choices:
+    - "aws"
+    - "oci"
+  default: "aws"
+
+ci_cd_provider:
+  type: str
+  help: >-
+    CI/CD pipeline for building and deploying.  Choose the pipeline
+    that matches your cloud or use GitHub Actions for a cloud-agnostic option.
+  choices:
+    - "aws_codepipeline"
+    - "oci_devops"
+    - "github_actions"
+  default: "aws_codepipeline"
+
+oci_compartment_id:
+  type: str
+  help: "OCI compartment OCID for resource provisioning."
+  default: ""
+  when: "{{ cloud_provider == 'oci' }}"
+
 database:
   type: str
   help: >-

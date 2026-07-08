@@ -1,0 +1,10 @@
+variable "compartment_id" { type = string }
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "region" { type = string; default = "us-ashburn-1" }
+variable "notification_topic_id" { type = string; description = "ONS topic OCID for pipeline notifications." }
+variable "ocir_repository_path" { type = string; description = "Full OCIR repository path." }
+variable "oke_cluster_id" { type = string; description = "OCID of the OKE cluster." }
+variable "github_pat_secret_id" { type = string; description = "OCID of the Vault secret containing the GitHub PAT." }
+variable "github_repo_url" { type = string; description = "GitHub repository HTTPS URL." }
+variable "github_branch" { type = string; default = "main" }

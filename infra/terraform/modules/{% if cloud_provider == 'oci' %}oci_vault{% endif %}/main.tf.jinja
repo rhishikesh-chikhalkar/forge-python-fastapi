@@ -1,0 +1,100 @@
+# OCI Vault module — stores application secrets securely.
+# The External Secrets Operator in Kubernetes syncs these into k8s Secrets.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Vault — secure key and secret storage
+# ---------------------------------------------------------------------------
+resource "oci_kms_vault" "app" {
+  compartment_id = var.compartment_id
+  display_name   = "${var.project_name}-${var.environment}-vault"
+  vault_type     = "DEFAULT"
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Master Encryption Key — used to encrypt all secrets in this vault
+# ---------------------------------------------------------------------------
+resource "oci_kms_key" "master" {
+  compartment_id = var.compartment_id
+  display_name   = "${var.project_name}-${var.environment}-master-key"
+  management_endpoint = oci_kms_vault.app.management_endpoint
+
+  key_shape {
+    algorithm = "AES"
+    length    = 32
+  }
+
+  protection_mode = "SOFTWARE"
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Application secrets — database credentials, API keys, etc.
+# ---------------------------------------------------------------------------
+resource "oci_vault_secret" "database_url" {
+  compartment_id = var.compartment_id
+  vault_id       = oci_kms_vault.app.id
+  key_id         = oci_kms_key.master.id
+  secret_name    = "${var.project_name}-${var.environment}-database-url"
+  description    = "Database connection string for ${var.project_name} (${var.environment})"
+
+  secret_content {
+    content_type = "BASE64"
+    content      = base64encode(var.database_url)
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+resource "oci_vault_secret" "secret_key" {
+  compartment_id = var.compartment_id
+  vault_id       = oci_kms_vault.app.id
+  key_id         = oci_kms_key.master.id
+  secret_name    = "${var.project_name}-${var.environment}-secret-key"
+  description    = "Application secret key for ${var.project_name} (${var.environment})"
+
+  secret_content {
+    content_type = "BASE64"
+    content      = base64encode(var.secret_key)
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+resource "oci_vault_secret" "redis_url" {
+  compartment_id = var.compartment_id
+  vault_id       = oci_kms_vault.app.id
+  key_id         = oci_kms_key.master.id
+  secret_name    = "${var.project_name}-${var.environment}-redis-url"
+  description    = "Redis connection string for ${var.project_name} (${var.environment})"
+
+  secret_content {
+    content_type = "BASE64"
+    content      = base64encode(var.redis_url)
+  }
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}

@@ -1,0 +1,69 @@
+# Production environment (OCI) — full-scale, multi-AD, production-hardened.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = { source = "oracle/oci"; version = "~> 6.0" }
+  }
+  backend "s3" {
+    bucket                      = "{{ project_slug }}-terraform-state"
+    key                         = "oci-prod/terraform.tfstate"
+    region                      = "us-ashburn-1"
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    force_path_style            = true
+  }
+}
+
+provider "oci" { region = var.region }
+
+module "vcn" {
+  source         = "../../modules/oci_vcn"
+  compartment_id = var.compartment_id
+  project_name   = var.project_name
+  environment    = "prod"
+  vcn_cidr       = "10.2.0.0/16"
+  ad_count       = 3
+}
+
+module "oke" {
+  source             = "../../modules/oci_oke"
+  compartment_id     = var.compartment_id
+  project_name       = var.project_name
+  environment        = "prod"
+  region             = var.region
+  vcn_id             = module.vcn.vcn_id
+  public_subnet_ids  = module.vcn.public_subnet_ids
+  private_subnet_ids = module.vcn.private_subnet_ids
+  node_shape         = "VM.Standard.E4.Flex"
+  node_ocpus         = 4
+  node_memory_gb     = 32
+  node_count         = 3
+  node_image_id      = var.node_image_id
+}
+
+module "ocir" {
+  source         = "../../modules/oci_ocir"
+  compartment_id = var.compartment_id
+  project_name   = var.project_name
+  environment    = "prod"
+  region         = var.region
+}
+
+module "vault" {
+  source         = "../../modules/oci_vault"
+  compartment_id = var.compartment_id
+  project_name   = var.project_name
+  environment    = "prod"
+  database_url   = var.database_url
+  secret_key     = var.secret_key
+}
+
+module "monitoring" {
+  source         = "../../modules/oci_monitoring"
+  compartment_id = var.compartment_id
+  project_name   = var.project_name
+  environment    = "prod"
+  cluster_id     = module.oke.cluster_id
+}

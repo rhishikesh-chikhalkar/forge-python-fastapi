@@ -7,7 +7,7 @@
 
 A production-grade FastAPI starter project generator built with [Copier](https://copier.readthedocs.io/).
 
-This template generates a robust backend project following hexagonal architecture, ready for deployment to AWS EKS with Terraform and Helm.
+This template generates a robust backend project following hexagonal architecture, ready for deployment to **AWS EKS** or **Oracle Cloud OKE** with Terraform and Helm.
 
 ## Features
 
@@ -15,9 +15,14 @@ This template generates a robust backend project following hexagonal architectur
 - **Hexagonal Architecture** (Domain, Services, Repositories)
 - **SQLAlchemy 2.0** (async) + Alembic migrations
 - **Docker** multi-stage builds (dev/prod)
-- **Terraform** for AWS EKS, VPC, ECR, Secrets Manager, CloudWatch
-- **Helm** chart with IRSA, HPA, and External Secrets integration
-- **CI/CD** via AWS CodePipeline and **GitHub Actions** (CI, CD, Release workflows)
+- **Cloud Provider** (choose one):
+  - **AWS** — VPC, EKS, ECR, Secrets Manager, CloudWatch
+  - **OCI** — VCN, OKE, OCIR, Vault, Monitoring (dev defaults use Always Free–eligible shapes)
+- **Helm** chart with HPA, External Secrets, and cloud-native ingress
+- **CI/CD** (choose one):
+  - **AWS CodePipeline** — CodeBuild + CodePipeline
+  - **OCI DevOps** — Build + Deployment Pipelines
+  - **GitHub Actions** — full build, push, and deploy workflow
 - **Celery** support (optional)
 - **ArgoCD** GitOps manifests (optional)
 
@@ -74,4 +79,22 @@ If you want to modify this template:
 
 1. Clone this repository
 2. Make your changes
-3. Test locally by running: `copier copy . /tmp/test-project`
+3. Test locally:
+
+```bash
+# Test AWS + CodePipeline (default)
+copier copy --defaults --data project_name="Test" --data author_name="Test" \
+  --data author_email="t@t.com" --data github_username="test" . /tmp/test-aws
+
+# Test OCI + OCI DevOps
+copier copy --defaults --data project_name="Test" --data author_name="Test" \
+  --data author_email="t@t.com" --data github_username="test" \
+  --data cloud_provider=oci --data ci_cd_provider=oci_devops \
+  --data oci_compartment_id="ocid1.compartment.oc1..example" . /tmp/test-oci
+
+# Test OCI + GitHub Actions
+copier copy --defaults --data project_name="Test" --data author_name="Test" \
+  --data author_email="t@t.com" --data github_username="test" \
+  --data cloud_provider=oci --data ci_cd_provider=github_actions \
+  --data oci_compartment_id="ocid1.compartment.oc1..example" . /tmp/test-oci-gh
+```

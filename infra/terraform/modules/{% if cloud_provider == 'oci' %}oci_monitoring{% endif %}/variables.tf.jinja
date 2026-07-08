@@ -1,0 +1,6 @@
+variable "compartment_id" { type = string }
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "cluster_id" { type = string; description = "OCID of the OKE cluster." }
+variable "cpu_alarm_threshold" { type = number; default = 80 }
+variable "memory_alarm_threshold" { type = number; default = 85 }

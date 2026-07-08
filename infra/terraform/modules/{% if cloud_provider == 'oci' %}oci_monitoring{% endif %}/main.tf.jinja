@@ -1,0 +1,100 @@
+# OCI Monitoring module — alarms for critical application metrics.
+# These alarms trigger ONS notifications when thresholds are breached,
+# ensuring the team is alerted before users are impacted.
+
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    oci = {
+      source  = "oracle/oci"
+      version = "~> 6.0"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# ONS Topic — alarm notifications are sent here (equivalent of SNS)
+# ---------------------------------------------------------------------------
+resource "oci_ons_notification_topic" "alarms" {
+  compartment_id = var.compartment_id
+  name           = "${var.project_name}-${var.environment}-alarms"
+  description    = "Alarm notifications for ${var.project_name} (${var.environment})"
+
+  freeform_tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CPU Utilization Alarm — triggers when average CPU exceeds threshold
+# ---------------------------------------------------------------------------
+resource "oci_monitoring_alarm" "cpu_high" {
+  compartment_id        = var.compartment_id
+  display_name          = "${var.project_name}-${var.environment}-cpu-high"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_id
+  namespace             = "oci_computeagent"
+  severity              = "CRITICAL"
+
+  query = "CpuUtilization[5m]{resourceId = \"${var.cluster_id}\"}.mean() > ${var.cpu_alarm_threshold}"
+
+  body = "CPU utilization exceeded ${var.cpu_alarm_threshold}% for 5 minutes on ${var.project_name} (${var.environment})"
+
+  destinations = [oci_ons_notification_topic.alarms.id]
+
+  # Repeat notification every 15 minutes while alarm is firing
+  repeat_notification_duration = "PT15M"
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Memory Utilization Alarm — triggers when memory usage is critically high
+# ---------------------------------------------------------------------------
+resource "oci_monitoring_alarm" "memory_high" {
+  compartment_id        = var.compartment_id
+  display_name          = "${var.project_name}-${var.environment}-memory-high"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_id
+  namespace             = "oci_computeagent"
+  severity              = "CRITICAL"
+
+  query = "MemoryUtilization[5m]{resourceId = \"${var.cluster_id}\"}.mean() > ${var.memory_alarm_threshold}"
+
+  body = "Memory utilization exceeded ${var.memory_alarm_threshold}% for 5 minutes on ${var.project_name} (${var.environment})"
+
+  destinations = [oci_ons_notification_topic.alarms.id]
+
+  repeat_notification_duration = "PT15M"
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
+
+# ---------------------------------------------------------------------------
+# OKE Node Pool Health Alarm — triggers when nodes become unhealthy
+# ---------------------------------------------------------------------------
+resource "oci_monitoring_alarm" "node_health" {
+  compartment_id        = var.compartment_id
+  display_name          = "${var.project_name}-${var.environment}-node-unhealthy"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_id
+  namespace             = "oci_oke"
+  severity              = "WARNING"
+
+  query = "UnhealthyNodes[5m]{clusterId = \"${var.cluster_id}\"}.max() > 0"
+
+  body = "Unhealthy nodes detected in OKE cluster ${var.project_name} (${var.environment})"
+
+  destinations = [oci_ons_notification_topic.alarms.id]
+
+  repeat_notification_duration = "PT30M"
+
+  freeform_tags = {
+    Environment = var.environment
+  }
+}
